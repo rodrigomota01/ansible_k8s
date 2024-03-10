@@ -1,0 +1,38 @@
+- name: Cordon kubernetes worker
+  become: yes
+  hosts: master
+  roles:
+    - upgrade-kubernetes-cordon
+
+- name: Upgrade Kubernetes etcd
+  become: yes
+  hosts: etcd
+  serial: 1
+  roles:
+    - upgrade-kubernetes-etcd
+
+- name: Upgrade Kubernetes master
+  become: yes
+  hosts: master
+  serial: 1
+  roles:
+    - upgrade-kubernetes-master
+
+- name: Upgrade Kubernetes worker
+  become: yes
+  hosts: master,worker
+  serial: 1
+  roles:
+    - upgrade-kubernetes-worker
+
+- name: Uncordon kubernetes worker
+  become: yes
+  hosts: master
+  roles:
+    - upgrade-kubernetes-uncordon
+
+- name: Upgrade kubernetes addons
+  become: yes
+  hosts: master
+  roles:
+    - upgrade-kubernetes-addons

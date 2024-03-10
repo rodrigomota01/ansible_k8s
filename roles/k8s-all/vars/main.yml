@@ -1,0 +1,10 @@
+k8s_dependences:
+- apt-transport-https
+- curl
+- ca-certificates
+- gpg
+
+k8s_packages:
+- kubelet
+- kubeadm
+- kubectl

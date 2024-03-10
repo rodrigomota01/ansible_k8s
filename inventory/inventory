@@ -1,0 +1,9 @@
+[servers:children]
+kubernetes_master
+kubernetes_worker
+
+[kubernetes_master]
+k8s_master	ansible_host=15.204.40.99
+
+[kubernetes_worker]
+k8s_node1	ansible_host=15.204.40.98

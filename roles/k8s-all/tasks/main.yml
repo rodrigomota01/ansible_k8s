@@ -1,0 +1,60 @@
+---
+- name: Add k8s apt key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add k8s repository
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    update_cache: yes
+
+- name: Install k8s dependences
+  apt:
+    name: "{{ item }}"
+  loop: "{{ k8s_dependences }}"
+
+
+- name: install k8s packages
+  apt:
+    name: "{{ item }}=1.26.0-00"
+    allow_downgrade: yes
+  loop: "{{ k8s_packages }}"
+  
+- name: Disable swap
+  command: swapoff -a
+
+- name: setup modules for k8s
+  shell: 
+    cmd: | 
+          echo 1 > /proc/sys/net/ipv4/ip_forward
+          sudo modprobe br_netfilter
+
+          cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+          br_netfilter
+          EOF
+
+          cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.bridge.bridge-nf-call-iptables = 1
+          EOF
+
+          sudo sysctl --system
+
+          cat <<EOF | sudo tee /etc/docker/daemon.json
+          {
+            "exec-opts": ["native.cgroupdriver=systemd"],
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "100m"
+            },
+            "storage-driver": "overlay2"
+          }
+          EOF
+
+          systemctl daemon-reload
+          systemctl restart docker
+
+          containerd config default | sed "s/SystemdCgroup = false/SystemdCgroup = true/g" - > /etc/containerd/config.toml
+          systemctl restart containerd

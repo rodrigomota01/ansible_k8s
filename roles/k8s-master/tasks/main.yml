@@ -1,0 +1,88 @@
+- name: Destroy cluster before starting again
+  command: kubeadm reset -f
+
+- name: Initialize k8s cluster
+  command: kubeadm init
+  register: kubeadm_init_output
+
+- name: Create file with output
+  copy:
+    content: "{{ kubeadm_init_output.stdout }}"
+    dest: /root/kubeadminit
+
+- name: Prepare kubejoin script
+  shell: tail -2 /root/kubeadminit > /root/kubejoin.sh
+
+- name: Get kubejoin
+  fetch:
+    dest: ./join
+    src: /root/kubejoin.sh
+
+- name: Organize files
+  shell: |
+        cp join/{{ inventory_hostname }}/root/kubejoin.sh join/  
+        rm -fr join/{{ inventory_hostname }}
+  delegate_to: localhost
+  become: no
+
+- name: Install pod network
+  command: kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.0/manifests/calico.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Install ingress nginx v1.6.4
+  command: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.6.4/deploy/static/provider/cloud/deploy.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Install cert manager v1.13.1
+  command: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.1/cert-manager.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Template metrics-sever
+  template: 
+    src: roles/k8s-master/template/metrics-server-components.yml.j2
+    dest: /root/metrics-server-components.yml
+    mode: 0775
+
+- name: Install metrics server v0.6.3
+  command: kubectl apply -f /root/metrics-server-components.yml                   
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Install metalLB v0.13.11
+  shell:
+    cmd: |
+      kubectl get configmap kube-proxy -n kube-system -o yaml | \
+      sed -e "s/strictARP: false/strictARP: true/" | \
+      kubectl apply -f - -n kube-system
+
+      kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.11/config/manifests/metallb-native.yaml
+
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# - name: sleep for 180 seconds and continue with play
+#   wait_for:
+#     timeout: 180
+
+- name: Template ipaddresspools.metallb
+  template:
+    src: roles/k8s-master/template/ipaddresspools.metallb.yml.j2
+    dest: /root/ipaddresspools.metallb.yml
+    mode: 0775
+
+# - name: Install ipaddresspools.metallb
+#   command: kubectl apply -f /root/ipaddresspools.metallb.yml                  
+#   environment:
+#     KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: copy configuration files to kubectl
+  command: "{{ item }}"
+  with_items:
+    - "rm -rf ~/.kube/"
+    - "mkdir -p $HOME/.kube"
+    - "cp /etc/kubernetes/admin.conf $HOME/.kube/config"
+
+

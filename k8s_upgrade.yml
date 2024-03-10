@@ -1,0 +1,6 @@
+- name: Upgrading cluster k8s
+  become: yes
+  hosts: kubernetes_master
+  roles:
+    - k8s-upgrades
+
